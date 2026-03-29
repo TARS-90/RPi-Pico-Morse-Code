@@ -9,7 +9,6 @@
 #define UART_ID uart0
 #define BAUD_RATE 115200
 
-
 #define LED_PIN	    22  //
 #define UART_TX_PIN 0  // pins
 #define	UART_RX_PIN 1 //
@@ -24,10 +23,35 @@ const uint8_t MORSE_CODE[] = {
 		0xCD, 0xC3 
 	};
 
+/*
+ * Ignoring letters cases in computing index for Morse Code array
+*/
+uint8_t compute_index(const char character) {
+	return character >= 'a' ? character - 'a' : character - 'A';
+}
 
+/*
+ * Morse code of a character:
+ *	- first two bits (MSB) are information of how many signals are
+ *	needed to display character, where:
+ *		- 01 -> two signals
+ *		- 10 -> three signals
+ *		- 11 -> four signals
+ *		
+ *	- last four bits (LSB) are the signals, where 1 is long signal
+ *	and 0 is short signal, but in reversed direction
+ *
+ *	!!!bits that are between are ignored!!!
+ * 
+ *
+ * Example: 
+ *	character ->		A
+ *	in real morse code ->	.- 
+ *	in my morse code ->	01xxxx10 (x - ignored bits)
+*/
 void ASCII_to_morse(const char character) {
-	uint8_t byte_code = MORSE_CODE[character - 'A'];
-	uint8_t signal_number = (byte_code / 64) + 1; // shifting six bits to right
+	uint8_t byte_code = MORSE_CODE[compute_index(character)];
+	uint8_t signal_number = (byte_code >> 6) + 1; // shifting six bits to right
 
 	while (signal_number--) {
 		// checking if last bit in morse code byte equals 1
@@ -42,7 +66,7 @@ void ASCII_to_morse(const char character) {
 
 		gpio_put(LED_PIN, OFF);
 		sleep_ms(200);
-		byte_code /= 2;	// shifting byte code to right by one bit	
+		byte_code >>= 1; // shifting byte code to right by one bit	
 	}
 }
 
