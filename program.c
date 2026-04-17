@@ -1,20 +1,28 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include "pico/stdlib.h"
 #include "hardware/gpio.h"
 #include "hardware/uart.h"
 #include "pico/binary_info.h"
+#include <string.h>
 
 #define ON   1
 #define OFF  0
 #define UART_ID uart0
 #define BAUD_RATE 115200
 
-#define LED_PIN	    22  //
-#define UART_TX_PIN 0  // pins
-#define	UART_RX_PIN 1 //
+// pins
+const uint8_t LED_PIN     = 22;
+const uint8_t UART_TX_PIN = 0;
+const uint8_t UART_RX_PIN = 1;
 
-const uint16_t LONG_SIGNAL = 700;   // in miliseconds
-const uint16_t SHORT_SIGNAL = 350; //
+// in miliseconds
+const uint16_t TIME_UNIT    = 150; 
+const uint16_t SHORT_SIGNAL = TIME_UNIT; 
+const uint16_t LONG_SIGNAL  = TIME_UNIT * 3;   
+const uint16_t WORD_DELAY   = TIME_UNIT * 7;
+
+// Morse Code tabe A-Z
 const uint8_t MORSE_CODE[] = {	
 		0x42, 0xC1, 0xC5, 0x81, 0x00, 0xC4,
 		0x83, 0xC0, 0x40, 0xCE, 0x85, 0xC2, 
@@ -23,31 +31,30 @@ const uint8_t MORSE_CODE[] = {
 		0xCD, 0xC3 
 	};
 
-/*
- * Ignoring letters cases in computing index for Morse Code array
-*/
+
+// Ignoring letters cases 
 uint8_t compute_index(const char character) {
 	return character >= 'a' ? character - 'a' : character - 'A';
 }
 
 /*
- * Morse code of a character:
- *	- first two bits (MSB) are information of how many signals are
- *	needed to display character, where:
- *		- 01 -> two signals
- *		- 10 -> three signals
- *		- 11 -> four signals
- *		
- *	- last four bits (LSB) are the signals, where 1 is long signal
- *	and 0 is short signal, but in reversed direction
- *
- *	!!!bits that are between are ignored!!!
- * 
- *
- * Example: 
- *	character ->		A
- *	in real morse code ->	.- 
- *	in my morse code ->	01xxxx10 (x - ignored bits)
+  Morse code of a character:
+ 	- first two bits (MSB) are information of how many signals are
+ 	needed to display character, where:
+ 		- 01 -> two signals
+ 		- 10 -> three signals
+ 		- 11 -> four signals
+ 		
+ 	- last four bits (LSB) are the signals, where 1 is long signal
+ 	and 0 is short signal, but in reversed direction
+ 
+ 	!!!bits that are between are ignored!!!
+ 
+ 
+  Example: 
+ 	character ->		A
+ 	in real morse code ->	.- 
+ 	in my morse code ->	01xxxx10 (x - ignored bits)
 */
 void ASCII_to_morse(const char character) {
 	uint8_t byte_code = MORSE_CODE[compute_index(character)];
@@ -65,23 +72,85 @@ void ASCII_to_morse(const char character) {
 		}
 
 		gpio_put(LED_PIN, OFF);
-		sleep_ms(200);
+		sleep_ms(TIME_UNIT);
 		byte_code >>= 1; // shifting byte code to right by one bit	
 	}
 }
 
 
+/*
+	Creating a Queue (FIFO) for reciving words from UART
+*/
+
+typedef struct Node {
+	struct Node* next;
+	char* word;
+} Node;
+
+typedef struct Queue {
+	Node* head;	
+	void (*add)(char*);
+	char* (*get)(void);
+} Queue;
+
+Queue queue = {0};
+
+void add(char* word) {
+	Node* node = malloc(sizeof(Node));
+	if (!node) return;
+
+	node->next = NULL;
+
+	node->word = malloc(strlen(word) + 1);
+	if (!node->word) {
+		free(node);
+		return;
+	}
+	strcpy(node->word, word);
+
+	// if queue is not empty
+	if (queue.head != NULL) {
+		// find last node 
+		Node* tmp = queue.head;
+		while (tmp->next != NULL) 
+			tmp = tmp->next;
+		tmp->next = node; // and then make current node the last one
+	}
+	else queue.head = node;
+}
+
+char* get() {
+	// if queue is not empty
+	if (queue.head != NULL) {
+		Node* tmp = queue.head;
+		char* word = tmp->word;
+		queue.head = tmp->next;
+		free(tmp->word);
+		free(tmp);
+
+		return word;
+	}
+	// if queue is empty
+	return NULL;
+}
+
 int main() {
 	stdio_init_all();
 	gpio_init(LED_PIN);
 	gpio_set_dir(LED_PIN, GPIO_OUT);
-    
-	char string[] = "SOS";
-	for (int i = 0; i < 3; i++) {
-		ASCII_to_morse(string[i]);
+  
+	// Queue initialization
+	queue.head = NULL;
+	queue.add = add;
+	queue.get = get;
+
+	char string[] = "JA";
+	while (true) {
+		for (int i = 0; i < strlen(string); i++) {
+			ASCII_to_morse(string[i]);
+		}
+		sleep_ms(WORD_DELAY);
 	}
-
-	sleep_ms(1000);
-
+	
 	return 0;
 }
