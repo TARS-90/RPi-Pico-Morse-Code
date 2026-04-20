@@ -33,7 +33,7 @@ const uint8_t MORSE_CODE[] = {
 
 
 // Ignoring letters cases 
-uint8_t compute_index(const char character) {
+uint8_t compute_index(const uint8_t character) {
 	return character >= 'a' ? character - 'a' : character - 'A';
 }
 
@@ -56,7 +56,7 @@ uint8_t compute_index(const char character) {
  	in real morse code ->	.- 
  	in my morse code ->	01xxxx10 (x - ignored bits)
 */
-void ASCII_to_morse(const char character) {
+void ASCII_to_morse(const uint8_t character) {
 	uint8_t byte_code = MORSE_CODE[compute_index(character)];
 	uint8_t signal_number = (byte_code >> 6) + 1; // shifting six bits to right
 
@@ -84,18 +84,18 @@ void ASCII_to_morse(const char character) {
 
 typedef struct Node {
 	struct Node* next;
-	char* word;
+	uint8_t*  word;
 } Node;
 
 typedef struct Queue {
 	Node* head;	
-	void (*add)(char*);
-	char* (*get)(void);
+	void  (*add)(uint8_t*);
+	uint8_t* (*get)(void);
 } Queue;
 
 Queue queue = {0};
 
-void add(char* word) {
+void add(uint8_t* word) {
 	Node* node = malloc(sizeof(Node));
 	if (!node) return;
 
@@ -119,11 +119,11 @@ void add(char* word) {
 	else queue.head = node;
 }
 
-char* get() {
+uint8_t* get() {
 	// if queue is not empty
 	if (queue.head != NULL) {
 		Node* tmp = queue.head;
-		char* word = tmp->word;
+		uint8_t* word = tmp->word;
 		queue.head = tmp->next;
 		free(tmp->word);
 		free(tmp);
@@ -135,21 +135,21 @@ char* get() {
 }
 
 int main() {
+	// Raspberry Pico initialization
 	stdio_init_all();
 	gpio_init(LED_PIN);
 	gpio_set_dir(LED_PIN, GPIO_OUT);
+	uart_init(UART_ID, BAUD_RATE);
+
+
   
 	// Queue initialization
 	queue.head = NULL;
-	queue.add = add;
-	queue.get = get;
+	queue.add  = add;
+	queue.get  = get;
 
-	char string[] = "JA";
 	while (true) {
-		for (int i = 0; i < strlen(string); i++) {
-			ASCII_to_morse(string[i]);
-		}
-		sleep_ms(WORD_DELAY);
+
 	}
 	
 	return 0;
